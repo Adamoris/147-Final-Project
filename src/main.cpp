@@ -1,15 +1,56 @@
 #include <WiFi.h>
 #include <HttpClient.h>
 #include <Adafruit_Sensor.h>
+#include <SparkFunLSM6DSO.h>
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
 #include <DHT.h>
 #include <DHT_U.h>
 #include <string>
 #include <sstream>
-
-#define DHT11_PIN 23
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define DHT11_PIN 12
+#define PIEZO_IN 36
+#define PIEZO_OUT 39
 #define DHTTYPE DHT11
 DHT dht(DHT11_PIN, DHT11);
 // This example downloads the URL "http://arduino.cc/"
+
+LSM6DSO myIMU; //Default constructor is I2C, addr 0x6B
+float stepThreshold = 2.2;
+float resetThreshold = 1.1;
+float cooldown = 700;
+float timer = 0;
+bool stepping = false;
+int steps = 0;
+BLECharacteristic *pCharacteristic;
+int reading = 0;
+int ledState = LOW;
+
+class MyCallbacks: public BLECharacteristicCallbacks {
+   void onWrite(BLECharacteristic *pCharacteristic) {
+     std::string value = pCharacteristic->getValue();
+ 
+     if (value.length() > 0) {
+       Serial.println("*********");
+       Serial.print("New value: ");
+       for (int i = 0; i < value.length(); i++)
+         Serial.print(value[i]);
+ 
+       Serial.println();
+       Serial.println("*********");
+       if (!value.compare("/LED on")) {
+         //digitalWrite(LED_TOGGLE, HIGH);
+         Serial.println("LED on!");
+       } else if (!value.compare("/LED off")) {
+         //digitalWrite(LED_TOGGLE, LOW);
+         Serial.println("LED off!");
+       }
+     }
+   }
+};
 
 char ssid[] = "Andrew iPhone";    // your network SSID (name) 
 char pass[] = "LilygoTTGO"; // your network password (use for WPA, or use as key for WEP)
@@ -30,7 +71,8 @@ const int kNetworkDelay = 1000;
 
 void setup() {
   Serial.begin(115200);
-
+  pinMode(PIEZO_OUT, OUTPUT);
+  /*
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   // We start by connecting to a WiFi network
@@ -54,13 +96,19 @@ void setup() {
   Serial.println(WiFi.localIP());
   Serial.println("MAC address: ");
   Serial.println(WiFi.macAddress());
-
+*/
   dht.begin();
   delay(1000);
 }
 
 void loop() {
+  reading = analogRead(PIEZO_IN);
 
+  if (reading >= 100) {
+    ledState = !ledState;
+    digitalWrite(PIEZO_OUT, ledState);
+  }
+/*
   int err = 0;
   
   WiFiClient c;
@@ -153,7 +201,7 @@ void loop() {
     Serial.println(err);
   }
   http.stop();
-
+*/
   // Redo the loop after delay
-  delay(1000);
+  delay(100);
 }
