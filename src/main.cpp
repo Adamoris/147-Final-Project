@@ -2,27 +2,41 @@
 #include <HttpClient.h>
 #include <Adafruit_Sensor.h>
 #include <SparkFunLSM6DSO.h>
+#include <Wire.h>
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
 #include <DHT.h>
 #include <DHT_U.h>
+#include <MAX30105.h>
+#include <heartRate.h>
+#include <spo2_algorithm.h>
 #include <string>
 #include <sstream>
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define DHT11_PIN 12
+#define DHT11_PIN 13
 #define PIEZO_IN 36
-#define PIEZO_OUT 39
+#define PIEZO_OUT 37
 #define DHTTYPE DHT11
+
 DHT dht(DHT11_PIN, DHT11);
 // This example downloads the URL "http://arduino.cc/"
 
 LSM6DSO myIMU; //Default constructor is I2C, addr 0x6B
+MAX30105 particleSensor;
+const byte RATE_SIZE = 4; //Increase this for more averaging. 4 is good.
+byte rates[RATE_SIZE]; //Array of heart rates
+byte rateSpot = 0;
+long lastBeat = 0; //Time at which the last beat occurred
+
+float beatsPerMinute;
+int beatAvg;
+
 float stepThreshold = 2.2;
 float resetThreshold = 1.1;
 float cooldown = 700;
-float timer = 0;
+long timer = 0;
 bool stepping = false;
 int steps = 0;
 BLECharacteristic *pCharacteristic;
@@ -72,136 +86,108 @@ const int kNetworkDelay = 1000;
 void setup() {
   Serial.begin(115200);
   pinMode(PIEZO_OUT, OUTPUT);
-  /*
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  // We start by connecting to a WiFi network
-  delay(1000);
- 
-  Serial.println();
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
+  delay(500); 
 
-  WiFi.begin(ssid, pass);
+  Wire.begin();
+  delay(10);
 
-  while (WiFi.status() != WL_CONNECTED) {
-      delay(1000);
-      Serial.print(".");
+  if( myIMU.begin() )
+    Serial.println("IMU Ready.");
+  else { 
+    Serial.println("Could not connect to IMU.");
+    Serial.println("Freezing");
   }
 
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-  Serial.println("MAC address: ");
-  Serial.println(WiFi.macAddress());
-*/
+  if( myIMU.initialize(BASIC_SETTINGS) )
+
+  if (particleSensor.begin(Wire, I2C_SPEED_FAST) == false) //Use default I2C port, 400kHz speed
+  {
+    Serial.println("MAX30105 was not found. Please check wiring/power. ");
+    while (1);
+  }
+
+  particleSensor.setup(); //Configure sensor with default settings
+  particleSensor.setPulseAmplitudeRed(0x0A); //Turn Red LED to low to indicate sensor is running
+  particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
+
   dht.begin();
   delay(1000);
 }
 
 void loop() {
   reading = analogRead(PIEZO_IN);
-
-  if (reading >= 100) {
-    ledState = !ledState;
-    digitalWrite(PIEZO_OUT, ledState);
-  }
-/*
-  int err = 0;
-  
-  WiFiClient c;
-  HttpClient http(c);
-
   float h = dht.readHumidity();
   delay(10);
   float t = dht.readTemperature();
 
-  Serial.print('\n');
-  Serial.print("Humidity = ");
-  Serial.print(h);
-  Serial.print("%  ");
-  Serial.print("Temperature = ");
-  Serial.print(t);
-  Serial.print("°C \n");
-  // delay(1000);
+  long irValue = particleSensor.getIR();
 
-  std::ostringstream oss;
-  oss << "/?temp=" << t << "&humid=" << h;
-  std::string var = oss.str();
-
-  char* sensorPath = const_cast<char*>(var.c_str());
-
-  //char kPath[] = "/?var=10&temp=69.0&humid=83.2";
-  err = http.get(kHostname, kHttpPort, sensorPath);
-  if (err == 0)
+  if (checkForBeat(irValue) == true)
   {
-    Serial.println("startedRequest ok");
+    //We sensed a beat!
+    long delta = millis() - lastBeat;
+    lastBeat = millis();
 
-    err = http.responseStatusCode();
-    if (err >= 0)
+    beatsPerMinute = 60 / (delta / 1000.0);
+
+    if (beatsPerMinute < 255 && beatsPerMinute > 20)
     {
-      Serial.print("Got status code: ");
-      Serial.println(err);
+      rates[rateSpot++] = (byte)beatsPerMinute; //Store this reading in the array
+      rateSpot %= RATE_SIZE; //Wrap variable
 
-      // Usually you'd check that the response code is 200 or a
-      // similar "success" code (200-299) before carrying on,
-      // but we'll print out whatever response we get
-
-      err = http.skipResponseHeaders();
-      if (err >= 0)
-      {
-        int bodyLen = http.contentLength();
-        Serial.print("Content length is: ");
-        Serial.println(bodyLen);
-        Serial.println();
-        Serial.println("Body returned follows:");
-      
-        // Now we've got to the body, so we can print it out
-        unsigned long timeoutStart = millis();
-        char c;
-        // Whilst we haven't timed out & haven't reached the end of the body
-        while ( (http.connected() || http.available()) &&
-               ((millis() - timeoutStart) < kNetworkTimeout) )
-        {
-            if (http.available())
-            {
-                c = http.read();
-                // Print out this character
-                Serial.print(c);
-               
-                bodyLen--;
-                // We read something, reset the timeout counter
-                timeoutStart = millis();
-            }
-            else
-            {
-                // We haven't got any data, so let's pause to allow some to
-                // arrive
-                delay(kNetworkDelay);
-            }
-        }
-      }
-      else
-      {
-        Serial.print("Failed to skip response headers: ");
-        Serial.println(err);
-      }
-    }
-    else
-    {    
-      Serial.print("Getting response failed: ");
-      Serial.println(err);
+      //Take average of readings
+      beatAvg = 0;
+      for (byte x = 0 ; x < RATE_SIZE ; x++)
+        beatAvg += rates[x];
+      beatAvg /= RATE_SIZE;
     }
   }
-  else
-  {
-    Serial.print("Connect failed: ");
-    Serial.println(err);
+
+  if (timer>= 50) {
+    timer = 0;
+    Serial.println("=========================");
+
+    Serial.print("Piezoelectric Reading: ");
+    Serial.println(reading);
+
+    Serial.print('\n');
+    Serial.print("Humidity = ");
+    Serial.print(h);
+    Serial.print("%  ");
+    Serial.print("Temperature = ");
+    Serial.print(t);
+    Serial.print("°C \n");
+
+    Serial.print('\n');
+    if (irValue < 50000) {
+      Serial.println("Oximeter Reading: no finger detected");
+    } else {
+      Serial.print("Oximeter Reading: ");
+      Serial.print("IR = ");
+      Serial.print(irValue);
+      Serial.print(", BPM = ");
+      Serial.print(beatsPerMinute);
+      Serial.print(", Avg BPM = ");
+      Serial.println(beatAvg);
+    }
+
+    Serial.print("\nAccelerometer:\n");
+    Serial.print(" X = ");
+    Serial.print(myIMU.readFloatAccelX(), 3);
+    Serial.print(" Y = ");
+    Serial.print(myIMU.readFloatAccelY(), 3);
+    Serial.print(" Z = ");
+    Serial.println(myIMU.readFloatAccelZ(), 3);
+
+    Serial.print("\nGyroscope:\n");
+    Serial.print(" X = ");
+    Serial.print(myIMU.readFloatGyroX(), 3);
+    Serial.print(" Y = ");
+    Serial.print(myIMU.readFloatGyroY(), 3);
+    Serial.print(" Z = ");
+    Serial.println(myIMU.readFloatGyroZ(), 3);
+    
+    Serial.println("=========================");
   }
-  http.stop();
-*/
-  // Redo the loop after delay
-  delay(100);
+  timer++;
 }
