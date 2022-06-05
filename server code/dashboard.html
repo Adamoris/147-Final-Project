@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+  <head>
+    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+    <script type="text/javascript" src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+    <script type="text/javascript">
+      $(function update_values() {
+        $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+        $.getJSON($SCRIPT_ROOT+"/update",
+            function(data) {
+                $("#piezo").text(data[1])
+                $("#humid").text(data[2]+"%")
+                $("#temp").text(data[3]+"°C")
+                $("#beat_avg").text(data[4])
+                $("#spo2").text(data[11])
+                $("#acc_x").text(data[5])
+                $("#acc_y").text(data[6])
+                $("#acc_z").text(data[7])
+                $("#gyro_x").text(data[8])
+                $("#gyro_y").text(data[9])
+                $("#gyro_z").text(data[10])
+                $("#tempMin").text(data[12]+"°C")
+                $("#tempMax").text(data[13]+"°C")
+                $("#tempAvg").text(data[14]+"°C")
+                $("#humidMin").text(data[15]+"%")
+                $("#humidMax").text(data[16]+"%")
+                $("#humidAvg").text(data[17]+"%")
+                if (parseFloat(data[2]) >= 60 ) {
+                        $("#dehumidToggle").text("ON")
+                } else {
+                        $("#dehumidToggle").text("OFF")
+                }
+                $("#apneaCount").text(data[18]+" episodes/hour")
+                $("#apneaLevel").text(data[19])
+                Plotly.extendTraces('piezoChart', {x: [[data[0]]], y: [[parseFloat(data[1])]]}, [0]);
+                Plotly.extendTraces('tempChart', {x: [[data[0]]], y: [[parseFloat(data[3])]]}, [0]);
+                Plotly.extendTraces('humidChart', {x: [[data[0]]], y: [[parseFloat(data[2])]]}, [0]);
+                Plotly.extendTraces('bpmChart', {x: [[data[0]]], y: [[parseFloat(data[4])]]}, [0]);
+                setTimeout(update_values, 1000);
+            });
+      });
+    </script>
+    <style>
+      h1 {text-align: center;}
+      {
+        box-sizing: border-box;
+      }
+      .column {
+        float: left;
+      }
+
+      .left {
+        width: 30%;
+      }
+
+      .right {
+        width: 40%;
+      }
+
+      .row:after {
+        content: "";
+        display: table;
+        clear: both;
+      }
+    </style>
+  </head>
+ <body style="background-color:rgb(37, 43, 77);">
+  
+  <h1><font face = "Verdana" size = "10" color = "darkgray">S O M N I U M</font><br /></h1>
+  <div id='piezoChart' class='chart'”></div>
+  <div id='piezoStats' class='row'”>
+    <p style="color:rgb(229, 223, 223);font-size:100%;font-family:verdana;text-align:center;">
+      <b>Sleep Apnea Occurences: </b><span id=apneaCount>?</span>&emsp;<b>Apnea Severity Level: </b><span id=apneaLevel>?</span><br>
+      <br>
+    </p>
+  </div>
+  <div id='tempChart' class='chart'”></div>
+  <div id='tempStats' class='row'”>
+    <p style="color:rgb(229, 223, 223);font-size:100%;font-family:verdana;text-align:center;">
+      <b>Avg Temp: </b><span id=tempAvg>?</span>&emsp;<b>Max Temp: </b><span id=tempMax>?</span> &emsp;<b>Min Temp: </b><span id=tempMin>?</span><br>
+      <br>
+    </p>
+  </div>
+  <div id='humidChart' class='chart'”></div>
+  <div id='humidStats' class='row'”>
+    <p style="color:rgb(229, 223, 223);font-size:100%;font-family:verdana;text-align:center;">
+      <b>Avg Humidity: </b><span id=humidAvg>?</span>&emsp;<b>Max Humidity: </b><span id=humidMax>?</span> &emsp;<b>Min Humidity: </b><span id=humidMin>?</span><br>
+        <b>Dehumidifier: </b><span id=dehumidToggle>?</span><br>
+      <br>
+    </p>
+  </div>
+  <div id='bpmChart' class='chart'”></div>
+  <h2 style="color:rgb(229, 223, 223);""><font face = "Verdana" size = "6">&emsp;Live Sensor Readings: </font></h2>
+  <div id="data" class="row">
+    <div id='data1' class="column left">
+      <p style="color:rgb(229, 223, 223);font-size:150%;font-family:verdana;">
+        <b>&emsp;Piezoelectric Reading</b><br>
+        <b>&emsp;Temperature</b><br>
+        <b>&emsp;Humidity</b><br>
+        <b>&emsp;Avg BPM</b><br>
+        <b>&emsp;SPO2</b><br>
+        <b>&emsp;Accelerometer</b><br>
+        <b>&emsp;3D Gyroscope</b><br>
+        <br>
+      </p>
+    </div>
+    <div id='data2' class="column right">
+      <p style="color:rgb(229, 223, 223);font-size:150%;font-family:verdana;">
+        > <span id=piezo>?</span><br>
+        > <span id=temp>?</span><br>
+        > <span id=humid>?</span><br>
+        > <span id=beat_avg>?</span><br>
+        > <span id=spo2>?</span><br>
+        > <span id=acc_x>?</span> <span id=acc_y>?</span> <span id=acc_z>?</span><br>
+        > <span id=gyro_x>?</span> <span id=gyro_y>?</span> <span id=gyro_z>?</span><br>
+        <br>
+      </p>
+    </div>
+  </div>
+
+</body>
+<script type='text/javascript'>
+  var graphs = {{piezoJSON | safe}};
+  Plotly.plot('piezoChart',graphs,{});
+  var graphs = {{tempJSON | safe}};
+  Plotly.plot('tempChart',graphs,{});
+  var graphs = {{humidJSON | safe}};
+  Plotly.plot('humidChart',graphs,{});
+  var graphs = {{bpmJSON | safe}};
+  Plotly.plot('bpmChart',graphs,{});
+</script></html>
