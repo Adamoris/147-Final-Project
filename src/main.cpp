@@ -3,9 +3,6 @@
 #include <Adafruit_Sensor.h>
 #include <SparkFunLSM6DSO.h>
 #include <Wire.h>
-// #include <BLEDevice.h>
-// #include <BLEUtils.h>
-// #include <BLEServer.h>
 #include <DHT.h>
 #include <DHT_U.h>
 #include <MAX30105.h>
@@ -15,8 +12,6 @@
 #include <string>
 #include <sstream>
 #include <TFT_eSPI.h>
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define DHT11_PIN 13
 #define PIEZO_IN 36
 #define PIEZO_OUT 37
@@ -25,81 +20,31 @@
 
 // Initialized Variables
 DHT dht(DHT11_PIN, DHT11);
-// This example downloads the URL "http://arduino.cc/"
-
 LSM6DSO myIMU; //Default constructor is I2C, addr 0x6B
 MAX30105 particleSensor;
 Pulse pulseIR;
 Pulse pulseRed;
 float SPO2;
-MAFilter bpm;
-// uint32_t irBuffer[100]; //infrared LED sensor data
-// uint32_t redBuffer[100];  //red LED sensor data
-// int32_t bufferLength; //data length
-// int32_t spo2; //SPO2 value
-// int8_t validSPO2; //indicator to show if the SPO2 calculation is valid
-// int32_t heartRate; //heart rate value
-// int8_t validHeartRate; //indicator to show if the heart rate calculation is valid
-
 const byte RATE_SIZE = 4; //Increase this for more averaging. 4 is good.
 byte rates[RATE_SIZE]; //Array of heart rates
 byte rateSpot = 0;
 long lastBeat = 0; //Time at which the last beat occurred
-
 float beatsPerMinute;
 int beatAvg;
-
-float stepThreshold = 2.2;
-float resetThreshold = 1.1;
-float cooldown = 700;
-long timer = 0;
-bool stepping = false;
-int steps = 0;
-// BLECharacteristic *pCharacteristic;
 int reading = 0;
-int ledState = LOW;
+long timer = 0;
 
-char ssid[] = "Andrew iPhone";    // your network SSID (name) 
+char ssid[] = "Andrew iPhone";  // your network SSID (name) 
 char pass[] = "LilygoTTGO"; // your network password (use for WPA, or use as key for WEP)
 
 // Name of the server we want to connect to
-// const char kHostname[] = "worldtimeapi.org";
 const char kHostname[] = "54.215.98.118";
-//const char kHostname[] = "192.168.0.246";
-// Path to download (this is the bit after the hostname in the URL
-// that you want to download
 const uint16_t kHttpPort = 5000;
-// const char kPath[] = "/api/timezone/Europe/London.txt";
-const char kPath[] = "/?var=10";
 
 // Number of milliseconds to wait without receiving any data before we give up
 const int kNetworkTimeout = 30*1000;
 // Number of milliseconds to wait if no data is available before trying again
 const int kNetworkDelay = 1000;
-
-// Additional Functions
-// class MyCallbacks: public BLECharacteristicCallbacks {
-//    void onWrite(BLECharacteristic *pCharacteristic) {
-//      std::string value = pCharacteristic->getValue();
- 
-//      if (value.length() > 0) {
-//        Serial.println("*********");
-//        Serial.print("New value: ");
-//        for (int i = 0; i < value.length(); i++)
-//          Serial.print(value[i]);
- 
-//        Serial.println();
-//        Serial.println("*********");
-//        if (!value.compare("/LED on")) {
-//          //digitalWrite(LED_TOGGLE, HIGH);
-//          Serial.println("LED on!");
-//        } else if (!value.compare("/LED off")) {
-//          //digitalWrite(LED_TOGGLE, LOW);
-//          Serial.println("LED off!");
-//        }
-//      }
-//    }
-// };
 
 TFT_eSPI tft = TFT_eSPI();
 
@@ -156,16 +101,6 @@ void setup() {
   particleSensor.setPulseAmplitudeRed(0x0A); //Turn Red LED to low to indicate sensor is running
   particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
 
-  // byte ledBrightness = 60; //Options: 0=Off to 255=50mA
-  // byte sampleAverage = 4; //Options: 1, 2, 4, 8, 16, 32
-  // byte ledMode = 2; //Options: 1 = Red only, 2 = Red + IR, 3 = Red + IR + Green
-  // byte sampleRate = 100; //Options: 50, 100, 200, 400, 800, 1000, 1600, 3200
-  // int pulseWidth = 411; //Options: 69, 118, 215, 411
-  // int adcRange = 4096; //Options: 2048, 4096, 8192, 16384
-
-  // particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); //Configure sensor with these settings
-
-
   dht.begin();
   delay(1000);
 
@@ -175,67 +110,6 @@ void setup() {
 }
 
 void loop() {
-  // bufferLength = 100;
-
-  // for (byte i = 0 ; i < bufferLength ; i++)
-  // {
-  //   while (particleSensor.available() == false) //do we have new data?
-  //     particleSensor.check(); //Check the sensor for new data
-
-  //   redBuffer[i] = particleSensor.getRed();
-  //   irBuffer[i] = particleSensor.getIR();
-  //   particleSensor.nextSample(); //We're finished with this sample so move to next sample
-
-  //   // Serial.print(F("red="));
-  //   // Serial.print(redBuffer[i], DEC);
-  //   // Serial.print(F(", ir="));
-  //   // Serial.println(irBuffer[i], DEC);
-  // }
-
-  // //calculate heart rate and SpO2 after first 100 samples (first 4 seconds of samples)
-  // maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
-
-  // while(1)
-  // {
-  //   //dumping the first 25 sets of samples in the memory and shift the last 75 sets of samples to the top
-  //   for (byte i = 25; i < 100; i++)
-  //   {
-  //     redBuffer[i - 25] = redBuffer[i];
-  //     irBuffer[i - 25] = irBuffer[i];
-  //   }
-
-  //   //take 25 sets of samples before calculating the heart rate.
-  //   for (byte i = 75; i < 100; i++)
-  //   {
-  //     while (particleSensor.available() == false) //do we have new data?
-  //       particleSensor.check(); //Check the sensor for new data
-
-  //     redBuffer[i] = particleSensor.getRed();
-  //     irBuffer[i] = particleSensor.getIR();
-  //     particleSensor.nextSample(); //We're finished with this sample so move to next sample
-
-  //     //send samples and calculation result to terminal program through UART
-  //     // Serial.print(F("red="));
-  //     // Serial.print(redBuffer[i], DEC);
-  //     // Serial.print(F(", ir="));
-  //     // Serial.print(irBuffer[i], DEC);
-
-  //     // Serial.print(F(", HR="));
-  //     // Serial.print(heartRate, DEC);
-
-  //     // Serial.print(F(", HRvalid="));
-  //     // Serial.print(validHeartRate, DEC);
-
-  //     // Serial.print(F(", SPO2="));
-  //     // Serial.print(spo2, DEC);
-
-  //     // Serial.print(F(", SPO2Valid="));
-  //     // Serial.println(validSPO2, DEC);
-  //   }
-
-  //   //After gathering 25 new samples recalculate HR and SP02
-  //   maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
-
     long now = millis();   //start time of this cycle
     int err =0;
     
@@ -276,26 +150,18 @@ void loop() {
         beatAvg /= RATE_SIZE;
       }
 
-      // DO DA SPO2 THINGY HERE
+      // SPO2 COMPUTATION
       int16_t IR_signal, Red_signal;
-      // bool draw_Red = true;
+
       IR_signal =  pulseIR.ma_filter(pulseIR.dc_filter(irValue)) ;
       Red_signal = pulseRed.ma_filter(pulseRed.dc_filter(redValue));
-      // long btpm = 60000/(now - lastBeat);
-      // if (btpm > 0 && btpm < 200) beatAvg = bpm.filter((int16_t)btpm);
-      // lastBeat = now; 
-      //digitalWrite(LED, HIGH); 
-      //led_on = true;
-      // compute SpO2 ratio
-      // long numerator   = (pulseRed.avgAC() * pulseIR.avgDC())/256;
-      // long denominator = (pulseRed.avgDC() * pulseIR.avgAC())/256;
-      // int RX100 = (denominator>0) ? (numerator * 100)/denominator : 999;
-      // using formula
-      //SPO2f = (10400 - RX100*17+50)/100; 
+
       int redDC = pulseRed.avgDC();
       int irDC = pulseIR.avgDC();
       float reading1 = (float)redValue / (float)redDC;
       float reading2 = (float)irValue / (float)irDC;
+      
+      // plug filtered AC/DC IR and Red readings into arterial SPO2 formula and normalize
       SPO2 = min(reading1, reading2) / max(reading1, reading2) * 98.98989;
       Serial.print("Red: ");
       Serial.println(reading1, 5);
@@ -304,7 +170,6 @@ void loop() {
       
       Serial.print("SPO2 ==> ");
       Serial.println(SPO2, 5);
-      
     }
 
     float acc_X = myIMU.readFloatAccelX();
@@ -393,14 +258,7 @@ void loop() {
       }
       http.stop();
 
-
-      // Serial.print("SPO2: ");
-      // Serial.print(spo2);
-      // Serial.print(" HR: ");
-      // Serial.println(heartRate);
-      // Print info on Serial Monitor
-
-      
+      // Print info on Serial Monitor      
       timer = 0;
       Serial.println("\n=========================");
       Serial.print("SPO2: ");
@@ -420,7 +278,6 @@ void loop() {
       Serial.print('\n');
       if (irValue < 50000) {
         Serial.println("Oximeter Reading: no finger detected");
-        
         tft.setTextDatum(BC_DATUM);
         tft.setTextColor(TFT_RED);  tft.setTextSize(3);
         tft.fillScreen(TFT_BLACK);
@@ -464,11 +321,6 @@ void loop() {
       Serial.println(gyro_Z, 3);
       
       Serial.println("=========================");
-      
-    
     }
     timer++;
-  //}
-
-  
 }
